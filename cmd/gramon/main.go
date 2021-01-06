@@ -19,11 +19,75 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	dproxy "github.com/koron/go-dproxy"
 	"github.com/mjibson/go-dsp/fft"
+	toml "github.com/pelletier/go-toml"
 	"github.com/yofu/rz2"
 )
 
+type Status struct {
+	name      string
+	frequency float64
+	size      int
+	mac       string
+	num       string
+	ext       string
+	direction int
+	mode      int
+}
+
+func (stat *Status) Set(tree *toml.Tree, key string) error {
+	stat.mac = tree.Get(fmt.Sprintf("%s.macaddress", key)).(string)
+	stat.num = tree.Get(fmt.Sprintf("%s.sensorno", key)).(string)
+	stat.ext = tree.Get(fmt.Sprintf("%s.extension", key)).(string)
+	dir, err := strconv.ParseInt(tree.Get(fmt.Sprintf("%s.direction", key)).(string), 10, 64)
+	if err != nil {
+		return err
+	}
+	stat.direction = int(dir)
+	return nil
+}
+
 var (
 	defaultsrc   = "tcp://192.168.1.23:18884"
+	defaultstat1 = &Status{
+		name:      "gc1",
+		frequency: 125.0,
+		size:      4096,
+		mac:       "b8:27:eb:a5:88:33",
+		num:       "01",
+		ext:       "acc02",
+		direction: 0,
+		mode:      TIME,
+	}
+	defaultstat2 = &Status{
+		name:      "gc2",
+		frequency: 125.0,
+		size:      4096,
+		mac:       "b8:27:eb:a5:88:33",
+		num:       "01",
+		ext:       "acc02",
+		direction: 1,
+		mode:      TIME,
+	}
+	defaultstat3 = &Status{
+		name:      "gc3",
+		frequency: 125.0,
+		size:      4096,
+		mac:       "b8:27:eb:a5:88:33",
+		num:       "01",
+		ext:       "acc02",
+		direction: 2,
+		mode:      TIME,
+	}
+	defaultstat4 = &Status{
+		name:      "gc4",
+		frequency: 125.0,
+		size:      4096,
+		mac:       "b8:27:eb:db:e7:f8",
+		num:       "01",
+		ext:       "acc02",
+		direction: 0,
+		mode:      TIME,
+	}
 	syncdraw     = true
 	srcentry     *ui.Entry
 	srcclient    mqtt.Client
@@ -150,15 +214,8 @@ func graphSize(clientWidth, clientHeight float64) (graphWidth, graphHeight float
 
 type GraphClient struct {
 	sync.Mutex
-	name            string
-	frequency       float64
-	size            int
-	mac             string
-	num             string
-	ext             string
+	*Status
 	unit            string
-	direction       int
-	mode            int
 	macentry        *ui.Entry
 	numentry        *ui.Entry
 	extentry        *ui.Entry
@@ -187,38 +244,31 @@ var (
 	}
 )
 
-func NewGraphClient(name string, size int, mac, num, ext string, direction int, mode string) *GraphClient {
+func NewGraphClient(status *Status) *GraphClient {
 	macentry := ui.NewEntry()
-	macentry.SetText(mac)
+	macentry.SetText(status.mac)
 	numentry := ui.NewEntry()
-	numentry.SetText(num)
+	numentry.SetText(status.num)
 	extentry := ui.NewEntry()
-	extentry.SetText(ext)
+	extentry.SetText(status.ext)
 	direntry := ui.NewEntry()
-	direntry.SetText(fmt.Sprintf("%d", direction))
+	direntry.SetText(fmt.Sprintf("%d", status.direction))
 	modebutton := ui.NewRadioButtons()
 	modebutton.Append("TIME")
 	modebutton.Append("AMP")
-	modebutton.SetSelected(TIME)
+	modebutton.SetSelected(status.mode)
 	gc := &GraphClient{
-		name:       name,
-		frequency:  62.5,
-		size:       size,
-		mac:        mac,
-		num:        num,
-		ext:        ext,
-		unit:       unittext(ext),
-		direction:  direction,
-		mode:       TIME,
+		Status:     status,
+		unit:       unittext(status.ext),
 		macentry:   macentry,
 		numentry:   numentry,
 		extentry:   extentry,
 		direntry:   direntry,
 		modebutton: modebutton,
-		xvalue:     make([]float64, size),
-		yvalue:     make([]float64, size),
-		xbuffer:    make([]float64, size),
-		ybuffer:    make([]float64, size),
+		xvalue:     make([]float64, status.size),
+		yvalue:     make([]float64, status.size),
+		xbuffer:    make([]float64, status.size),
+		ybuffer:    make([]float64, status.size),
 		verticalAxis: &Axis{
 			ndiv:  4,
 			scale: 0.1,
@@ -803,24 +853,23 @@ func setupUI() {
 	grid.Append(srcentry, 0, 0, 1, 1, true, ui.AlignFill, false, ui.AlignFill)
 	grid.Append(conbutton, 1, 0, 1, 1, false, ui.AlignFill, false, ui.AlignFill)
 
-	graphclient1 = NewGraphClient("gc1", 4096, "b8:27:eb:a5:88:33", "01", "acc02", 0, "TIME")
+	graphclient1 = NewGraphClient(defaultstat1)
+	graphclient2 = NewGraphClient(defaultstat2)
+	graphclient3 = NewGraphClient(defaultstat3)
+	graphclient4 = NewGraphClient(defaultstat4)
+
 	vbox1 := createGraphClientArea(graphclient1)
 	grid.Append(graphclient1.drawarea, 0, 1, 1, 1, true, ui.AlignFill, true, ui.AlignFill)
 	grid.Append(vbox1, 1, 1, 1, 1, false, ui.AlignFill, true, ui.AlignFill)
 
-	graphclient2 = NewGraphClient("gc2", 4096, "b8:27:eb:55:4d:0f", "01", "acc02", 0, "TIME")
 	vbox2 := createGraphClientArea(graphclient2)
 	grid.Append(graphclient2.drawarea, 0, 2, 1, 1, true, ui.AlignFill, true, ui.AlignFill)
 	grid.Append(vbox2, 1, 2, 1, 1, false, ui.AlignFill, true, ui.AlignFill)
 
-	graphclient3 = NewGraphClient("gc3", 4096, "b8:27:eb:19:f7:09", "01", "acc02", 0, "TIME")
-	graphclient3.frequency = 62.5
 	vbox3 := createGraphClientArea(graphclient3)
 	grid.Append(graphclient3.drawarea, 0, 3, 1, 1, true, ui.AlignFill, true, ui.AlignFill)
 	grid.Append(vbox3, 1, 3, 1, 1, false, ui.AlignFill, true, ui.AlignFill)
 
-	graphclient4 = NewGraphClient("gc4", 4096, "b8:27:eb:db:e7:f8", "01", "acc02", 0, "TIME")
-	graphclient4.frequency = 62.5
 	vbox4 := createGraphClientArea(graphclient4)
 	grid.Append(graphclient4.drawarea, 0, 4, 1, 1, true, ui.AlignFill, true, ui.AlignFill)
 	grid.Append(vbox4, 1, 4, 1, 1, false, ui.AlignFill, true, ui.AlignFill)
@@ -1023,6 +1072,19 @@ func rangevalue(txt string) (float64, float64, error) {
 	}
 }
 
+func ReadConfig(fn string) error {
+	tree, err := toml.LoadFile(fn)
+	if err != nil {
+		return err
+	}
+	defaultsrc = tree.Get("mosquitto.server").(string)
+	defaultstat1.Set(tree, "unit.first")
+	defaultstat2.Set(tree, "unit.second")
+	defaultstat3.Set(tree, "unit.third")
+	defaultstat4.Set(tree, "unit.forth")
+	return nil
+}
+
 //TODO: debugモードを追加
 func main() {
 	syncd := flag.Bool("sync", false, "synchronized drawing (default: false)")
@@ -1032,6 +1094,7 @@ func main() {
 	directory := flag.String("dir", ".", "save directory")
 	amprange := flag.String("freq", "", "freq. range (min:max)")
 	peakrange := flag.String("peak", "", "peak range (min:max)")
+	conffn := flag.String("config", "", "config file")
 	flag.Parse()
 	syncdraw = *syncd
 	if *cafn != "" {
@@ -1055,6 +1118,12 @@ func main() {
 		if err == nil {
 			peakxrange[0] = minval
 			peakxrange[1] = maxval
+		}
+	}
+	if *conffn != "" {
+		err := ReadConfig(*conffn)
+		if err != nil {
+			log.Fatal(err)
 		}
 	}
 
