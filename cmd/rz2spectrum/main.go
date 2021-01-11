@@ -223,7 +223,7 @@ func OutputFFT(otpfn string, units ...*AccUnit) error {
 	var otp bytes.Buffer
 	for i := 0; i < units[0].fftsize; i++ {
 		for j := 0; j < len(units); j++ {
-			otp.WriteString(fmt.Sprintf("%.3f %+15.12f %+15.12f %+15.12f ", units[j].df*float64(i), units[j].ampx[i], units[j].ampy[i], units[j].ampz[i]))
+			otp.WriteString(fmt.Sprintf("%d %+15.12f %+15.12f %+15.12f %.3f %+15.12f %+15.12f %+15.12f ", units[j].time[units[j].startind+i], units[j].xacc[units[j].startind+i], units[j].yacc[units[j].startind+i], units[j].zacc[units[j].startind+i], units[j].df*float64(i), units[j].ampx[i], units[j].ampy[i], units[j].ampz[i]))
 		}
 		otp.WriteString("\n")
 	}
