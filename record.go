@@ -126,7 +126,7 @@ func ReadServerRecord(fn string) ([]ServerRecord, error) {
 		}
 		var ct int64
 		buf := bytes.NewReader(bufct)
-		binary.Read(buf, binary.BigEndian, &ct)
+		binary.Read(buf, binary.LittleEndian, &ct)
 
 		// Read topic
 		btopic := make([]byte, 0)
@@ -163,8 +163,9 @@ func ReadServerRecord(fn string) ([]ServerRecord, error) {
 		}
 		var size int32
 		buf = bytes.NewReader(bufsize)
-		binary.Read(buf, binary.BigEndian, &size)
+		binary.Read(buf, binary.LittleEndian, &size)
 
+		// fmt.Println(ct, topic, size)
 		// Read data
 		data := make([]byte, size)
 		n, err = f.Read(data)
