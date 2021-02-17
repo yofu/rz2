@@ -78,10 +78,15 @@ func CalcFFT(acc []float64, subave bool) []complex128 {
 
 var (
 	macaddress = map[string]string{
-		"flab01": "b8:27:eb:a5:88:33",
-		"flab02": "b8:27:eb:55:4d:0f",
-		"flab03": "b8:27:eb:19:f7:09",
-		"flab04": "b8:27:eb:db:e7:f8",
+		"moncli01": "b8:27:eb:fd:5a:ea",
+		"flab01":   "b8:27:eb:a5:88:33",
+		"flab02":   "b8:27:eb:55:4d:0f",
+		"flab03":   "b8:27:eb:19:f7:09",
+		"flab04":   "b8:27:eb:db:e7:f8",
+		"rz7":      "b8:27:eb:e0:61:11",
+		"rz8":      "b8:27:eb:00:a2:74",
+		"rz9":      "b8:27:eb:93:82:33",
+		"rz10":     "b8:27:eb:54:78:27",
 	}
 )
 
