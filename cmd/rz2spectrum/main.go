@@ -258,10 +258,10 @@ var (
 
 func ReadData(datdir string, fns ...string) error {
 	for _, fn := range fns {
-		records, err := rz2.ReadServerRecord(filepath.Join(datdir, fn))
-		if err != nil {
-			return err
-		}
+		records, _ := rz2.ReadServerRecord(filepath.Join(datdir, fn))
+		// if err != nil {
+		// 	return err
+		// }
 		var unit *AccUnit
 		for _, rec := range records {
 			lis := strings.Split(rec.Topic, "/")
@@ -313,7 +313,7 @@ func Gnuplot(filename string) error {
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command("gnuplot", "-p", "-")
+	cmd := exec.Command("C:\\gnuplot\\bin\\gnuplot.exe", "-p", "-")
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return err
@@ -338,6 +338,7 @@ func main() {
 	subave := flag.Bool("subave", true, "subtract average or not")
 	datdir := flag.String("dir", "..\\dat", "dat directory")
 	smooth := flag.Int("smooth", 0, "smooting")
+	plotonly := flag.Bool("p", false, "plot only")
 	flag.Parse()
 
 	loc, _ := time.LoadLocation("Asia/Tokyo")
@@ -347,40 +348,49 @@ func main() {
 	}
 	fftstart := int(t.UnixNano() / 1000000)
 
-	datfn, err := SearchDatFile(t, *datdir)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("INPUT FILE      : %v\n", datfn)
-	fmt.Printf("FFT START TIME  : %s, %d\n", t.Format("2006-01-02T15:04:05.000"), fftstart)
-	fmt.Printf("FFT SIZE        : %d\n", *fftsize)
-	fmt.Printf("SUBTRACT AVERAGE: %t\n", *subave)
-
-	unames := []string{"flab01", "flab02", "flab03", "flab04"}
-	for _, uname := range unames {
-		accunits[macaddress[uname]] = NewAccUnit(uname, fftstart, *fftsize)
-	}
-
-	err = ReadData(*datdir, datfn...)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	for _, uname := range unames {
-		err = accunits[macaddress[uname]].CalcFFT(*subave, *smooth)
+	filename := fmt.Sprintf("%s-%d-%d", t.Format("2006-01-02-15-04-05"), *fftsize, *smooth)
+	if !*plotonly {
+		datfn, err := SearchDatFile(t, *datdir)
 		if err != nil {
 			log.Fatal(err)
 		}
-	}
+		fmt.Printf("INPUT FILE      : %v\n", datfn)
+		fmt.Printf("FFT START TIME  : %s, %d\n", t.Format("2006-01-02T15:04:05.000"), fftstart)
+		fmt.Printf("FFT SIZE        : %d\n", *fftsize)
+		fmt.Printf("SUBTRACT AVERAGE: %t\n", *subave)
 
-	filename := fmt.Sprintf("%s-%d-%d", t.Format("2006-01-02-15-04-05"), *fftsize, *smooth)
-	err = OutputFFT(fmt.Sprintf("%s.dat", filename),
-		accunits[macaddress["flab01"]],
-		accunits[macaddress["flab02"]],
-		accunits[macaddress["flab03"]],
-		accunits[macaddress["flab04"]])
-	if err != nil {
-		log.Fatal(err)
+		unames := []string{"flab01", "flab02", "flab03", "flab04"}
+		// unames := []string{"rz8", "rz9"}
+		// unames := []string{"moncli01"}
+		for _, uname := range unames {
+			accunits[macaddress[uname]] = NewAccUnit(uname, fftstart, *fftsize)
+		}
+
+		err = ReadData(*datdir, datfn...)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		for _, uname := range unames {
+			err = accunits[macaddress[uname]].CalcFFT(*subave, *smooth)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+
+		// err = OutputFFT(fmt.Sprintf("%s.dat", filename),
+		// 	accunits[macaddress["rz8"]],
+		// 	accunits[macaddress["rz9"]])
+		err = OutputFFT(fmt.Sprintf("%s.dat", filename),
+			accunits[macaddress["flab01"]],
+			accunits[macaddress["flab02"]],
+			accunits[macaddress["flab03"]],
+			accunits[macaddress["flab04"]])
+		// err = OutputFFT(fmt.Sprintf("%s.dat", filename),
+		// 	accunits[macaddress["moncli01"]])
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	err = Gnuplot(filename)
