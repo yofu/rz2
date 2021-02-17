@@ -46,10 +46,16 @@ func SearchDatFile(t time.Time, dir string) ([]string, error) {
 	}
 	switch ind {
 	case 0:
+		if len(lis) < 2 {
+			return lis, nil
+		}
 		return lis[ind : ind+2], nil
 	case len(lis) - 1:
 		return lis[ind-1 : ind+1], nil
 	default:
+		if len(lis) < ind+2 {
+			return lis[ind-1:], nil
+		}
 		return lis[ind-1 : ind+2], nil
 	}
 }
