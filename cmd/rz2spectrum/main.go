@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"text/template"
 	"time"
@@ -34,6 +35,7 @@ func SearchDatFile(t time.Time, dir string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	sort.Strings(lis)
 	pattern := t.Format("2006-01-02-15")
 	ind := 0
 	for i, fn := range lis {
