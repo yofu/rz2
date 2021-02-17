@@ -16,7 +16,7 @@ func ReadData(datdir string, fns ...string) error {
 			return err
 		}
 		for _, rec := range records {
-			fmt.Println(rec.Topic)
+			fmt.Println(rec.Topic, len(rec.Content))
 		}
 	}
 	return nil
