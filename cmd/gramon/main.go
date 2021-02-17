@@ -1082,6 +1082,16 @@ func ReadConfig(fn string) error {
 	defaultstat2.Set(tree, "unit.second")
 	defaultstat3.Set(tree, "unit.third")
 	defaultstat4.Set(tree, "unit.forth")
+	minval, maxval, err := rangevalue(tree.Get("range.amp").(string))
+	if err == nil {
+		ampxrange[0] = minval
+		ampxrange[1] = maxval
+	}
+	minval, maxval, err = rangevalue(tree.Get("range.peak").(string))
+	if err == nil {
+		peakxrange[0] = minval
+		peakxrange[1] = maxval
+	}
 	return nil
 }
 
