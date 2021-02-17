@@ -171,9 +171,9 @@ func (unit *AccUnit) CalcFFT(subave bool, smooth int) error {
 	unit.ffty = CalcFFT(yacc2, subave)
 	unit.fftz = CalcFFT(zacc2, subave)
 	for i := 0; i < unit.fftsize; i++ {
-		unit.ampx[i] = cmplx.Abs(unit.fftx[i]) / unit.freq
-		unit.ampy[i] = cmplx.Abs(unit.ffty[i]) / unit.freq
-		unit.ampz[i] = cmplx.Abs(unit.fftz[i]) / unit.freq
+		unit.ampx[i] = cmplx.Abs(unit.fftx[i])
+		unit.ampy[i] = cmplx.Abs(unit.ffty[i])
+		unit.ampz[i] = cmplx.Abs(unit.fftz[i])
 	}
 	if smooth > 0 {
 		fmt.Printf("SMOOTH: %d\n", smooth)
