@@ -175,7 +175,7 @@ func constructGraph(psize int, width, height float64, xvalue, yvalue []float64, 
 		fftval := CalcFFT(yvalue)
 		fftabs := make([]float64, len(fftval))
 		for i := 0; i < len(fftval); i++ {
-			fftabs[i] = cmplx.Abs(fftval[i]) / freq
+			fftabs[i] = cmplx.Abs(fftval[i])
 		}
 		startind := 0
 		endind := 0
