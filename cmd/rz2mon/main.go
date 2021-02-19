@@ -160,7 +160,7 @@ func CreateList(n int) {
 }
 
 func main() {
-	server := flag.String("server", "tcp://192.168.1.23:18884", "server url:port")
+	server := flag.String("server", "", "server url:port")
 	cafn := flag.String("cafile", "", "ca file")
 	crtfn := flag.String("crtfile", "", "crt file")
 	keyfn := flag.String("keyfile", "", "key file")
@@ -191,11 +191,15 @@ func main() {
 		return units[i].receivedtime.After(units[j].receivedtime)
 	}
 
-	client, err := StartSubscriber(*server, []string{"#"})
+	srvaddress, err := rz2.ServerAddress(*server)
+	if srvaddress == "" {
+		log.Fatal(err)
+	}
+	client, err := StartSubscriber(srvaddress, []string{"#"})
 	if err != nil && client == nil {
 		log.Fatal(err)
 	}
-	list.Rows[0] = fmt.Sprintf("SERVER: %s", *server)
+	list.Rows[0] = fmt.Sprintf("SERVER: %s", srvaddress)
 
 	list.Rows[2] = "NO NAME                 REC.SIZE     TIME                EXT   INFO"
 

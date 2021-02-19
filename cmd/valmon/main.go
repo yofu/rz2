@@ -173,7 +173,7 @@ func getLatestFileSize(path string) (int64, error) {
 }
 
 func main() {
-	server := flag.String("server", "tcp://192.168.1.23:18884", "server url:port")
+	server := flag.String("server", "", "server url:port")
 	cfn := flag.String("client", "address.txt", "client data")
 	cafn := flag.String("cafile", "", "ca file")
 	crtfn := flag.String("crtfile", "", "crt file")
@@ -257,10 +257,14 @@ func main() {
 	rl.SetRect(80, 0, 160, len(rightkeys)+2)
 	ui.Render(rl)
 
+	srvaddress, err := rz2.ServerAddress(*server)
+	if srvaddress == "" {
+		log.Fatal(err)
+	}
 	sl := widgets.NewList()
 	sl.Title = "Status"
 	sl.Rows = make([]string, 4)
-	sl.Rows[0] = fmt.Sprintf("SERVER: %s", *server)
+	sl.Rows[0] = fmt.Sprintf("SERVER: %s", srvaddress)
 	sl.Rows[1] = "STATUS: [connected](fg:green)"
 	sl.Rows[2] = "[no error](fg:green)"
 	sl.Rows[3] = "file size"
@@ -274,10 +278,10 @@ func main() {
 	var srcclient mqtt.Client
 
 	srcopts := mqtt.NewClientOptions()
-	srcopts.AddBroker(*server)
+	srcopts.AddBroker(srvaddress)
 	srcopts.SetAutoReconnect(false)
 	srcopts.SetClientID(id)
-	if strings.HasPrefix(*server, "ssl") {
+	if strings.HasPrefix(srvaddress, "ssl") {
 		tlsconfig, err := rz2.NewTLSConfig(cafile, crtfile, keyfile)
 		if err != nil {
 			log.Fatal(err)

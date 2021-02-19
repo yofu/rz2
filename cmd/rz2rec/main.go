@@ -155,7 +155,7 @@ func StartSubscriber(server string, topics []string, fn func(mqtt.Client, mqtt.M
 }
 
 func main() {
-	server := flag.String("server", "tcp://192.168.1.23:18884", "server url:port")
+	server := flag.String("server", "", "server url:port")
 	cafn := flag.String("cafile", "", "ca file")
 	crtfn := flag.String("crtfile", "", "crt file")
 	keyfn := flag.String("keyfile", "", "key file")
@@ -188,7 +188,11 @@ func main() {
 	records := make(map[string]*Record)
 	nrecords := 0
 
-	client, err := StartSubscriber(*server, []string{"#"}, func(client mqtt.Client, msg mqtt.Message) {
+	srvaddress, err := rz2.ServerAddress(*server)
+	if srvaddress == "" {
+		log.Fatal(err)
+	}
+	client, err := StartSubscriber(srvaddress, []string{"#"}, func(client mqtt.Client, msg mqtt.Message) {
 		lis := strings.Split(msg.Topic(), "/")
 		var rec *Record
 		rec = records[lis[0]]
