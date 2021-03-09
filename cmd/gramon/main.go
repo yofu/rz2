@@ -164,7 +164,11 @@ var (
 	graybrush  = mkSolidBrush(colorGray, 0.7)
 )
 
-func constructGraph(psize int, width, height float64, xvalue, yvalue []float64, mode string, factor float64, freq float64) ([]float64, []float64, []float64, []float64) {
+var (
+	cepscoeff = 128
+)
+
+func constructGraph(psize int, width, height float64, xvalue, yvalue []float64, mode string, factor float64, freq float64) ([]float64, []float64, []float64, []float64, []float64, []float64) {
 	switch mode {
 	case "AMP":
 		df := freq / float64(len(yvalue))
@@ -174,8 +178,24 @@ func constructGraph(psize int, width, height float64, xvalue, yvalue []float64, 
 		}
 		fftval := CalcFFT(yvalue)
 		fftabs := make([]float64, len(fftval))
+		ceps1 := make([]float64, len(fftval))
 		for i := 0; i < len(fftval); i++ {
 			fftabs[i] = cmplx.Abs(fftval[i])
+			ceps1[i] = 20 * math.Log10(cmplx.Abs(fftval[i]))
+		}
+		ceps2 := fft.IFFTReal(ceps1)
+		ceps3 := make([]float64, len(fftval))
+		for i := 0; i < len(fftval); i++ {
+			if i > cepscoeff && i < len(fftval)-cepscoeff+1 {
+				ceps3[i] = 0.0
+			} else {
+				ceps3[i] = real(ceps2[i])
+			}
+		}
+		ceps4 := fft.FFTReal(ceps3)
+		cepstrum := make([]float64, len(fftval))
+		for i := 0; i < len(fftval); i++ {
+			cepstrum[i] = math.Pow(10.0, cmplx.Abs(ceps4[i])/20.0)
 		}
 		startind := 0
 		endind := 0
@@ -190,11 +210,13 @@ func constructGraph(psize int, width, height float64, xvalue, yvalue []float64, 
 		}
 		xs := make([]float64, endind-startind+1)
 		ys := make([]float64, endind-startind+1)
+		ys2 := make([]float64, endind-startind+1)
 		for i := 0; i <= endind-startind; i++ {
 			xs[i] = width * (freqs[startind+i] - ampxrange[0]) / (ampxrange[1] - ampxrange[0])
 			ys[i] = height - fftabs[startind+i]*factor
+			ys2[i] = height - cepstrum[startind+i]*factor
 		}
-		return freqs[startind : endind+1], fftabs[startind : endind+1], xs, ys
+		return freqs[startind : endind+1], fftabs[startind : endind+1], cepstrum[startind : endind+1], xs, ys, ys2
 	default:
 		xincr := width / float64(psize-1)
 		xs := make([]float64, psize)
@@ -203,7 +225,7 @@ func constructGraph(psize int, width, height float64, xvalue, yvalue []float64, 
 			xs[i] = xincr * float64(i)
 			ys[i] = height*0.5 - yvalue[i]*factor
 		}
-		return xvalue, yvalue, xs, ys
+		return xvalue, yvalue, yvalue, xs, ys, ys
 	}
 }
 
@@ -498,15 +520,15 @@ func (gc *GraphClient) Draw(a *ui.Area, p *ui.AreaDrawParams) {
 	mid := 0.5 * (min + max)
 	mid2 := math.Round(mid/gc.verticalAxis.scale) * gc.verticalAxis.scale
 
-	var xvalue, yvalue, xs, ys []float64
+	var xvalue, yvalue, xs, ys, ys2 []float64
 	switch gc.mode {
 	case TIME:
 		for j := 0; j < length; j++ {
 			ydata[j] -= mid2
 		}
-		xvalue, yvalue, xs, ys = constructGraph(length, graphWidth, graphHeight, xdata, ydata, "", (float64(graphHeight)/float64(gc.verticalAxis.ndiv))/gc.verticalAxis.scale, gc.frequency)
+		xvalue, yvalue, _, xs, ys, ys2 = constructGraph(length, graphWidth, graphHeight, xdata, ydata, "", (float64(graphHeight)/float64(gc.verticalAxis.ndiv))/gc.verticalAxis.scale, gc.frequency)
 	case AMP:
-		xvalue, yvalue, xs, ys = constructGraph(length, graphWidth, graphHeight, xdata, ydata, "AMP", (float64(graphHeight)/float64(gc.verticalAxis.ndiv))/gc.verticalAxis.scale, gc.frequency)
+		xvalue, yvalue, _, xs, ys, ys2 = constructGraph(length, graphWidth, graphHeight, xdata, ydata, "AMP", (float64(graphHeight)/float64(gc.verticalAxis.ndiv))/gc.verticalAxis.scale, gc.frequency)
 	}
 
 	path = ui.DrawNewPath(ui.DrawFillModeWinding)
@@ -546,6 +568,22 @@ func (gc *GraphClient) Draw(a *ui.Area, p *ui.AreaDrawParams) {
 	}
 	p.Context.Stroke(path, brush, sp)
 	path.Free()
+
+	// cepstrum
+	if gc.mode == AMP {
+		path = ui.DrawNewPath(ui.DrawFillModeWinding)
+		path.NewFigure(xs[0], ys2[0])
+		for i := 1; i < len(xs); i++ {
+			path.LineTo(xs[i], ys2[i])
+		}
+		path.End()
+		brush.R = 0.9
+		brush.G = 0.9
+		brush.B = 0.0
+		brush.A = 1.0
+		p.Context.Stroke(path, brush, sp)
+		path.Free()
+	}
 
 	switch gc.mode {
 	case TIME:
@@ -1091,6 +1129,9 @@ func ReadConfig(fn string) error {
 	if err == nil {
 		peakxrange[0] = minval
 		peakxrange[1] = maxval
+	}
+	if val := tree.Get("cepstrum.coeff"); val != nil {
+		cepscoeff = int(val.(int64))
 	}
 	return nil
 }
