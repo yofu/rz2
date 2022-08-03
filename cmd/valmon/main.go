@@ -37,6 +37,10 @@ type Datatype int
 const (
 	Strain Datatype = iota
 	Acc
+	Clock
+	Ill
+	Ir
+	Gill
 )
 
 var (
@@ -72,6 +76,14 @@ func ReadClient(fn string) error {
 					ty = Strain
 				case "acc":
 					ty = Acc
+				case "clock":
+					ty = Clock
+				case "ill":
+					ty = Ill
+				case "ir":
+					ty = Ir
+				case "gill":
+					ty = Gill
 				}
 			}
 		}
@@ -149,6 +161,51 @@ func strainStats(client *Client, msg mqtt.Message) (string, error) {
 	return fmt.Sprintf("%s/%s: %s, data= %d, min/max= [%d/%d](fg:%s)", client.hostname, lis[1], rz2.ConvertUnixtime(mtime[len(mtime)-1]).Format("15:04:05.000"), len(strain), int32(min), int32(max), color), nil
 }
 
+func clockStats(client *Client, msg mqtt.Message) (string, error) {
+	var send_time int64
+	var data int32
+	buf := bytes.NewReader(msg.Payload()[:8])
+	binary.Read(buf, binary.BigEndian, &send_time)
+	buf = bytes.NewReader(msg.Payload()[8:12])
+	binary.Read(buf, binary.BigEndian, &data)
+	// fmt.Println(data, msg.Payload()[8:12])
+	lis := strings.Split(msg.Topic(), "/")
+	if len(lis) < 2 {
+		return "", fmt.Errorf("unknown client: %s", msg.Topic())
+	}
+	return fmt.Sprintf("%s/%s: %s, data= %d", client.hostname, lis[1], rz2.ConvertUnixtime(send_time).Format("15:04:05.000"), data), nil
+}
+
+func illStats(client *Client, msg mqtt.Message) (string, error) {
+	send_time, data, err := rz2.ConvertIll(msg.Payload())
+	if err != nil {
+		return "", err
+	}
+	ave := 0.0
+	for i :=0; i < len(data); i++ {
+		ave += float64(data[i])
+	}
+	ave /= float64(len(data))
+	return fmt.Sprintf("%s: %s, data= %d, ave= %.3f", client.hostname, rz2.ConvertUnixtime(send_time).Format("15:04:05.000"), len(data), ave), nil
+}
+
+func irStats(client *Client, msg mqtt.Message) (string, error) {
+	send_time, data, err := rz2.ConvertIR(msg.Payload())
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s: %s, data= %d", client.hostname, rz2.ConvertUnixtime(send_time).Format("15:04:05.000"), data), nil
+}
+
+func gillStats(client *Client, msg mqtt.Message) (string, error) {
+	send_time, data, err := rz2.ConvertGill(msg.Payload())
+	if err != nil {
+		return "", err
+	}
+	lis := strings.Split(data, ",")
+	return fmt.Sprintf("%s: %s, spped= %s, angle= %s", client.hostname, rz2.ConvertUnixtime(send_time).Format("15:04:05.000"), lis[2], lis[1]), nil
+}
+
 func getLatestFileSize(path string) (int64, error) {
 	stat, err := os.Stat(path)
 	if err != nil {
@@ -224,6 +281,46 @@ func main() {
 				clientkeys[key] = c
 			} else {
 				key := fmt.Sprintf("%s/01/acc02", c.macaddress)
+				rightkeys = append(rightkeys, key)
+				clientkeys[key] = c
+			}
+		case Clock:
+			if c.column == 0 {
+				key := fmt.Sprintf("%s/01/clk01", c.macaddress)
+				leftkeys = append(leftkeys, key)
+				clientkeys[key] = c
+			} else {
+				key := fmt.Sprintf("%s/01/clk01", c.macaddress)
+				rightkeys = append(rightkeys, key)
+				clientkeys[key] = c
+			}
+		case Ill:
+			if c.column == 0 {
+				key := fmt.Sprintf("%s/01/ill01", c.macaddress)
+				leftkeys = append(leftkeys, key)
+				clientkeys[key] = c
+			} else {
+				key := fmt.Sprintf("%s/01/ill01", c.macaddress)
+				rightkeys = append(rightkeys, key)
+				clientkeys[key] = c
+			}
+		case Ir:
+			if c.column == 0 {
+				key := fmt.Sprintf("%s/01/ir01", c.macaddress)
+				leftkeys = append(leftkeys, key)
+				clientkeys[key] = c
+			} else {
+				key := fmt.Sprintf("%s/01/ir01", c.macaddress)
+				rightkeys = append(rightkeys, key)
+				clientkeys[key] = c
+			}
+		case Gill:
+			if c.column == 0 {
+				key := fmt.Sprintf("%s/01/gill01", c.macaddress)
+				leftkeys = append(leftkeys, key)
+				clientkeys[key] = c
+			} else {
+				key := fmt.Sprintf("%s/01/gill01", c.macaddress)
 				rightkeys = append(rightkeys, key)
 				clientkeys[key] = c
 			}
@@ -324,6 +421,106 @@ func main() {
 			status, err := strainStats(cl, msg)
 			if err != nil {
 				sl.Rows[2] = fmt.Sprintf("[%s/%d:%s](fg:red)", cl.hostname, lis[1], err)
+				ui.Render(sl)
+				return
+			}
+			switch cl.column {
+			case 0:
+				for i, k := range leftkeys {
+					if k == msg.Topic() {
+						ll.Rows[i] = status
+						ui.Render(ll)
+						break
+					}
+				}
+			case 1:
+				for i, k := range rightkeys {
+					if k == msg.Topic() {
+						rl.Rows[i] = status
+						ui.Render(rl)
+						break
+					}
+				}
+			}
+		case "clk01":
+			status, err := clockStats(cl, msg)
+			if err != nil {
+				sl.Rows[2] = fmt.Sprintf("[%s/%d:%s](fg:red)", cl.hostname, lis[1], err)
+				ui.Render(sl)
+				return
+			}
+			switch cl.column {
+			case 0:
+				for i, k := range leftkeys {
+					if k == msg.Topic() {
+						ll.Rows[i] = status
+						ui.Render(ll)
+						break
+					}
+				}
+			case 1:
+				for i, k := range rightkeys {
+					if k == msg.Topic() {
+						rl.Rows[i] = status
+						ui.Render(rl)
+						break
+					}
+				}
+			}
+		case "ill01":
+			status, err := illStats(cl, msg)
+			if err != nil {
+				sl.Rows[2] = fmt.Sprintf("[%s:%s](fg:red)", cl.hostname, err)
+				ui.Render(sl)
+				return
+			}
+			switch cl.column {
+			case 0:
+				for i, k := range leftkeys {
+					if k == msg.Topic() {
+						ll.Rows[i] = status
+						ui.Render(ll)
+						break
+					}
+				}
+			case 1:
+				for i, k := range rightkeys {
+					if k == msg.Topic() {
+						rl.Rows[i] = status
+						ui.Render(rl)
+						break
+					}
+				}
+			}
+		case "ir01":
+			status, err := irStats(cl, msg)
+			if err != nil {
+				sl.Rows[2] = fmt.Sprintf("[%s:%s](fg:red)", cl.hostname, err)
+				ui.Render(sl)
+				return
+			}
+			switch cl.column {
+			case 0:
+				for i, k := range leftkeys {
+					if k == msg.Topic() {
+						ll.Rows[i] = status
+						ui.Render(ll)
+						break
+					}
+				}
+			case 1:
+				for i, k := range rightkeys {
+					if k == msg.Topic() {
+						rl.Rows[i] = status
+						ui.Render(rl)
+						break
+					}
+				}
+			}
+		case "gill01":
+			status, err := gillStats(cl, msg)
+			if err != nil {
+				sl.Rows[2] = fmt.Sprintf("[%s:%s](fg:red)", cl.hostname, err)
 				ui.Render(sl)
 				return
 			}

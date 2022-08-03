@@ -310,6 +310,8 @@ func unittext(ext string) string {
 		return "gal"
 	case "str01":
 		return "με"
+	case "ill01":
+		return "lx"
 	default:
 		return ""
 	}
@@ -401,6 +403,29 @@ func (gc *GraphClient) UpdateData(msg mqtt.Message) error {
 		ave /= float64(len(ydata))
 		gc.frequency = 1000.0 * float64(len(mtime)-1) / float64(mtime[len(mtime)-1]-mtime[0])
 		gc.lastmtime = mtime[len(mtime)-1]
+	case "ill01":
+		var send_time int64
+		buf := bytes.NewReader(msg.Payload()[:8])
+		binary.Read(buf, binary.BigEndian, &send_time)
+		send_time, data, err := rz2.ConvertIll(msg.Payload())
+		if err != nil {
+			return err
+		}
+		xdata = make([]float64, len(data))
+		ydata = make([]float64, len(data))
+		ave = 0.0
+		if gc.lastmtime == 0 {
+			gc.lastmtime = send_time - int64(gc.frequency*float64(len(ydata)))
+		}
+		dtime := float64(send_time-gc.lastmtime) / float64(len(ydata))
+		gc.frequency = 1000.0 / dtime
+		for i := 0; i < len(xdata); i++ {
+			xdata[i] = float64(gc.lastmtime) + dtime*float64(i+1)
+			ydata[i] = float64(data[i])
+			ave += ydata[i]
+		}
+		ave /= float64(len(ydata))
+		gc.lastmtime = send_time
 	default:
 		return nil
 	}
@@ -564,6 +589,12 @@ func (gc *GraphClient) Draw(a *ui.Area, p *ui.AreaDrawParams) {
 		brush.R = 0.9
 		brush.G = 0.2
 		brush.B = 0.9
+		brush.A = 1.0
+	case "ill01":
+		ylabel = "Illuminance [lx]"
+		brush.R = 0.9
+		brush.G = 0.9
+		brush.B = 0.2
 		brush.A = 1.0
 	}
 	p.Context.Stroke(path, brush, sp)

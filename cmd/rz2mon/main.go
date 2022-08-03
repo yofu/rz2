@@ -13,6 +13,7 @@ import (
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	toml "github.com/pelletier/go-toml/v2"
 	ui "github.com/gizak/termui/v3"
 	"github.com/gizak/termui/v3/widgets"
 	dproxy "github.com/koron/go-dproxy"
@@ -29,11 +30,40 @@ var (
 	list *widgets.List
 )
 
+type Config struct {
+	Server string `toml:"server"`
+	Cafile string `toml:"cafile"`
+	Crtfile string `toml:"crtfile"`
+	Keyfile string `toml:"keyfile"`
+	Homedir string `toml:"homedir"`
+	Removehour int `toml:"removehour"`
+	List []string `toml:"list"`
+}
+
+func (c *Config) Println() {
+	fmt.Printf("server: %s\n", c.Server)
+	fmt.Printf("cafile: %s\n", c.Cafile)
+	fmt.Printf("crtfile: %s\n", c.Crtfile)
+	fmt.Printf("keyfile: %s\n", c.Keyfile)
+	fmt.Printf("homedir: %s\n", c.Homedir)
+	fmt.Printf("removehour: %d\n", c.Removehour)
+	fmt.Print("list:\n")
+	for i, t := range c.List {
+		fmt.Printf("    %d: %s\n", i, t)
+	}
+	fmt.Println("")
+}
+
 var (
-	cafile  = ""
-	crtfile = ""
-	keyfile = ""
-	homedir = os.Getenv("HOME")
+	defaultconfig   = &Config{
+		Server: "tcp://133.11.95.82:18884",
+		Cafile: "",
+		Crtfile: "",
+		Keyfile: "",
+		Homedir: os.Getenv("HOME"),
+		Removehour: 0,
+		List: make([]string, 0),
+	}
 )
 
 type Unit struct {
@@ -53,7 +83,7 @@ func statusline(str string) {
 }
 
 func recordfilesize(macaddress string) (int, error) {
-	dir := filepath.Join(homedir, "rz2/recorder", strings.Replace(macaddress, ":", "_", -1))
+	dir := filepath.Join(defaultconfig.Homedir, "rz2/recorder", strings.Replace(macaddress, ":", "_", -1))
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		return 0, err
 	}
@@ -74,7 +104,7 @@ func StartSubscriber(server string, topics []string) (mqtt.Client, error) {
 	opts.SetAutoReconnect(false)
 	opts.SetClientID(fmt.Sprintf("rz2mon_%d", time.Now().UnixNano()))
 	if strings.HasPrefix(server, "ssl") {
-		tlsconfig, err := rz2.NewTLSConfig(cafile, crtfile, keyfile)
+		tlsconfig, err := rz2.NewTLSConfig(defaultconfig.Cafile, defaultconfig.Crtfile, defaultconfig.Keyfile)
 		if err != nil {
 			return nil, err
 		}
@@ -159,26 +189,37 @@ func CreateList(n int) {
 	ui.Render(list)
 }
 
+func ReadConfig(fn string) error {
+	b, err := ioutil.ReadFile(fn)
+	if err != nil {
+		return err
+	}
+	fmt.Println(b)
+	fmt.Println(defaultconfig.List)
+	toml.Unmarshal(b, &defaultconfig)
+	fmt.Println(defaultconfig.List)
+	return nil
+}
+
 func main() {
 	server := flag.String("server", "", "server url:port")
-	cafn := flag.String("cafile", "", "ca file")
-	crtfn := flag.String("crtfile", "", "crt file")
-	keyfn := flag.String("keyfile", "", "key file")
-	home := flag.String("home", "", "home directory")
+	conffn := flag.String("config", "", "config file")
 	flag.Parse()
 
-	if *cafn != "" {
-		cafile = *cafn
+	if *conffn != "" {
+		err := ReadConfig(*conffn)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
-	if *crtfn != "" {
-		crtfile = *crtfn
+	if *server != "" {
+		defaultconfig.Server = *server
 	}
-	if *keyfn != "" {
-		keyfile = *keyfn
+	if len(defaultconfig.List) == 0 {
+		defaultconfig.List = []string{"#"}
 	}
-	if *home != "" {
-		homedir = *home
-	}
+
+	defaultconfig.Println()
 
 	if err := ui.Init(); err != nil {
 		log.Fatal(err)
@@ -191,11 +232,11 @@ func main() {
 		return units[i].receivedtime.After(units[j].receivedtime)
 	}
 
-	srvaddress, err := rz2.ServerAddress(*server)
+	srvaddress, err := rz2.ServerAddress(defaultconfig.Server)
 	if srvaddress == "" {
 		log.Fatal(err)
 	}
-	client, err := StartSubscriber(srvaddress, []string{"#"})
+	client, err := StartSubscriber(srvaddress, defaultconfig.List)
 	if err != nil && client == nil {
 		log.Fatal(err)
 	}
@@ -214,7 +255,9 @@ func main() {
 					statusline(fmt.Sprintf("[not connected](fg:yellow): %s", time.Now().Format("15:04:05.000")))
 					for {
 						if client.IsConnected() {
-							client.Subscribe("#", 0, nil)
+							for _, t := range defaultconfig.List {
+								client.Subscribe(t, 0, nil)
+							}
 							break
 						}
 						token := client.Connect()
@@ -244,6 +287,10 @@ func main() {
 		case "i":
 			sortfunc = func(i, j int) bool {
 				return strings.Compare(units[i].hostaddress, units[j].hostaddress) < 0
+			}
+		case "m":
+			sortfunc = func(i, j int) bool {
+				return strings.Compare(units[i].hardwareaddress, units[j].hardwareaddress) < 0
 			}
 		}
 		ui.Render(list)

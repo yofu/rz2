@@ -163,7 +163,7 @@ func ReadServerRecord(fn string) ([]ServerRecord, error) {
 		}
 		var size int32
 		buf = bytes.NewReader(bufsize)
-		binary.Read(buf, binary.LittleEndian, &size)
+		binary.Read(buf, binary.BigEndian, &size)
 
 		// fmt.Println(ct, topic, size)
 		// Read data

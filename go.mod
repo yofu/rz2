@@ -10,4 +10,5 @@ require (
 	github.com/koron/go-dproxy v1.3.0
 	github.com/mjibson/go-dsp v0.0.0-20180508042940-11479a337f12
 	github.com/pelletier/go-toml v1.8.1
+	github.com/pelletier/go-toml/v2 v2.0.0
 )

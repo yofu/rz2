@@ -14,16 +14,46 @@ import (
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	toml "github.com/pelletier/go-toml/v2"
 	"github.com/yofu/rz2"
 )
 
 var endian = binary.BigEndian
 
+type Config struct {
+	Server string `toml:"server"`
+	Cafile string `toml:"cafile"`
+	Crtfile string `toml:"crtfile"`
+	Keyfile string `toml:"keyfile"`
+	Homedir string `toml:"homedir"`
+	Removehour int `toml:"removehour"`
+	List []string `toml:"list"`
+}
+
+func (c *Config) Println() {
+	fmt.Printf("server: %s\n", c.Server)
+	fmt.Printf("cafile: %s\n", c.Cafile)
+	fmt.Printf("crtfile: %s\n", c.Crtfile)
+	fmt.Printf("keyfile: %s\n", c.Keyfile)
+	fmt.Printf("homedir: %s\n", c.Homedir)
+	fmt.Printf("removehour: %d\n", c.Removehour)
+	fmt.Print("list:\n")
+	for i, t := range c.List {
+		fmt.Printf("    %d: %s\n", i, t)
+	}
+	fmt.Println("")
+}
+
 var (
-	cafile  = ""
-	crtfile = ""
-	keyfile = ""
-	homedir = os.Getenv("HOME")
+	defaultconfig   = &Config{
+		Server: "tcp://133.11.95.82:18884",
+		Cafile: "",
+		Crtfile: "",
+		Keyfile: "",
+		Homedir: os.Getenv("HOME"),
+		Removehour: 0,
+		List: make([]string, 0),
+	}
 )
 
 type Record struct {
@@ -92,7 +122,7 @@ func (r *Record) record(msg mqtt.Message) error {
 }
 
 func removeoldfiles(dur time.Duration) error {
-	dir := filepath.Join(homedir, "rz2/recorder")
+	dir := filepath.Join(defaultconfig.Homedir, "rz2/recorder")
 
 	rd, err := ioutil.ReadDir(dir)
 	if err != nil {
@@ -129,7 +159,7 @@ func StartSubscriber(server string, topics []string, fn func(mqtt.Client, mqtt.M
 	opts.SetAutoReconnect(false)
 	opts.SetClientID(fmt.Sprintf("rz2rec_%d", time.Now().UnixNano()))
 	if strings.HasPrefix(server, "ssl") {
-		tlsconfig, err := rz2.NewTLSConfig(cafile, crtfile, keyfile)
+		tlsconfig, err := rz2.NewTLSConfig(defaultconfig.Cafile, defaultconfig.Crtfile, defaultconfig.Keyfile)
 		if err != nil {
 			return nil, err
 		}
@@ -154,28 +184,32 @@ func StartSubscriber(server string, topics []string, fn func(mqtt.Client, mqtt.M
 	return client, nil
 }
 
+func ReadConfig(fn string) error {
+	b, err := ioutil.ReadFile(fn)
+	if err != nil {
+		return err
+	}
+	fmt.Println(b)
+	fmt.Println(defaultconfig.List)
+	toml.Unmarshal(b, &defaultconfig)
+	fmt.Println(defaultconfig.List)
+	return nil
+}
+
 func main() {
-	server := flag.String("server", "", "server url:port")
-	cafn := flag.String("cafile", "", "ca file")
-	crtfn := flag.String("crtfile", "", "crt file")
-	keyfn := flag.String("keyfile", "", "key file")
-	home := flag.String("home", "", "home directory")
+	conffn := flag.String("config", "", "config file")
 	flag.Parse()
 
-	if *cafn != "" {
-		cafile = *cafn
-	}
-	if *crtfn != "" {
-		crtfile = *crtfn
-	}
-	if *keyfn != "" {
-		keyfile = *keyfn
-	}
-	if *home != "" {
-		homedir = *home
+	if *conffn != "" {
+		err := ReadConfig(*conffn)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
-	basedir := filepath.Join(homedir, "rz2/recorder/log")
+	defaultconfig.Println()
+
+	basedir := filepath.Join(defaultconfig.Homedir, "rz2/recorder/log")
 	os.MkdirAll(basedir, 0755)
 	logfile, err := os.Create(filepath.Join(basedir, fmt.Sprintf("log%s.0", time.Now().Format("20060102150405"))))
 	if err != nil {
@@ -184,15 +218,15 @@ func main() {
 	defer logfile.Close()
 	log.SetOutput(logfile)
 
-	recdir := filepath.Join(homedir, "rz2/recorder")
+	recdir := filepath.Join(defaultconfig.Homedir, "rz2/recorder")
 	records := make(map[string]*Record)
 	nrecords := 0
 
-	srvaddress, err := rz2.ServerAddress(*server)
+	srvaddress, err := rz2.ServerAddress(defaultconfig.Server)
 	if srvaddress == "" {
 		log.Fatal(err)
 	}
-	client, err := StartSubscriber(srvaddress, []string{"#"}, func(client mqtt.Client, msg mqtt.Message) {
+	client, err := StartSubscriber(srvaddress, defaultconfig.List, func(client mqtt.Client, msg mqtt.Message) {
 		lis := strings.Split(msg.Topic(), "/")
 		var rec *Record
 		rec = records[lis[0]]
@@ -221,9 +255,13 @@ func main() {
 			for _, r := range records {
 				r.setdest()
 			}
-			err := removeoldfiles(-50 * 24 * time.Hour) // 50 days before
-			if err != nil {
-				log.Println(err)
+			if defaultconfig.Removehour > 0 {
+				err := removeoldfiles(-1 * time.Duration(defaultconfig.Removehour) * time.Hour)
+				if err != nil {
+					log.Println(err)
+				} else {
+					log.Printf("removed files %d hours ago", defaultconfig.Removehour)
+				}
 			}
 		case <-conticker.C:
 			if !client.IsConnected() {
@@ -231,7 +269,9 @@ func main() {
 				for {
 					if client.IsConnected() {
 						log.Printf("reconnected: %s", time.Now().Format("2006-01-02 15:04:05"))
-						client.Subscribe("#", 0, nil)
+						for _, t := range defaultconfig.List {
+							client.Subscribe(t, 0, nil)
+						}
 						break
 					}
 					token := client.Connect()
