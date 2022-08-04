@@ -202,8 +202,7 @@ func gillStats(client *Client, msg mqtt.Message) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	lis := strings.Split(data, ",")
-	return fmt.Sprintf("%s: %s, spped= %s, angle= %s", client.hostname, rz2.ConvertUnixtime(send_time).Format("15:04:05.000"), lis[2], lis[1]), nil
+	return fmt.Sprintf("%s: %s, angle= %.1f[°], speed= %.1f[m/s]", client.hostname, rz2.ConvertUnixtime(send_time).Format("15:04:05.000"), data[0], data[1]), nil
 }
 
 func getLatestFileSize(path string) (int64, error) {

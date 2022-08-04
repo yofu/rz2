@@ -13,7 +13,6 @@ import (
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	toml "github.com/pelletier/go-toml/v2"
 	ui "github.com/gizak/termui/v3"
 	"github.com/gizak/termui/v3/widgets"
 	dproxy "github.com/koron/go-dproxy"
@@ -30,32 +29,8 @@ var (
 	list *widgets.List
 )
 
-type Config struct {
-	Server string `toml:"server"`
-	Cafile string `toml:"cafile"`
-	Crtfile string `toml:"crtfile"`
-	Keyfile string `toml:"keyfile"`
-	Homedir string `toml:"homedir"`
-	Removehour int `toml:"removehour"`
-	List []string `toml:"list"`
-}
-
-func (c *Config) Println() {
-	fmt.Printf("server: %s\n", c.Server)
-	fmt.Printf("cafile: %s\n", c.Cafile)
-	fmt.Printf("crtfile: %s\n", c.Crtfile)
-	fmt.Printf("keyfile: %s\n", c.Keyfile)
-	fmt.Printf("homedir: %s\n", c.Homedir)
-	fmt.Printf("removehour: %d\n", c.Removehour)
-	fmt.Print("list:\n")
-	for i, t := range c.List {
-		fmt.Printf("    %d: %s\n", i, t)
-	}
-	fmt.Println("")
-}
-
 var (
-	defaultconfig   = &Config{
+	defaultconfig   = &rz2.Config{
 		Server: "tcp://133.11.95.82:18884",
 		Cafile: "",
 		Crtfile: "",
@@ -189,25 +164,13 @@ func CreateList(n int) {
 	ui.Render(list)
 }
 
-func ReadConfig(fn string) error {
-	b, err := ioutil.ReadFile(fn)
-	if err != nil {
-		return err
-	}
-	fmt.Println(b)
-	fmt.Println(defaultconfig.List)
-	toml.Unmarshal(b, &defaultconfig)
-	fmt.Println(defaultconfig.List)
-	return nil
-}
-
 func main() {
 	server := flag.String("server", "", "server url:port")
 	conffn := flag.String("config", "", "config file")
 	flag.Parse()
 
 	if *conffn != "" {
-		err := ReadConfig(*conffn)
+		err := defaultconfig.ReadConfig(*conffn)
 		if err != nil {
 			log.Fatal(err)
 		}

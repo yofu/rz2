@@ -11,4 +11,5 @@ require (
 	github.com/mjibson/go-dsp v0.0.0-20180508042940-11479a337f12
 	github.com/pelletier/go-toml v1.8.1
 	github.com/pelletier/go-toml/v2 v2.0.0
+	go.bug.st/serial v1.3.5 // indirect
 )

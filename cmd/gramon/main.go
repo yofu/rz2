@@ -312,6 +312,8 @@ func unittext(ext string) string {
 		return "με"
 	case "ill01":
 		return "lx"
+	case "gill01":
+		return "m/s"
 	default:
 		return ""
 	}
@@ -411,6 +413,27 @@ func (gc *GraphClient) UpdateData(msg mqtt.Message) error {
 		if err != nil {
 			return err
 		}
+		xdata = make([]float64, len(data))
+		ydata = make([]float64, len(data))
+		ave = 0.0
+		if gc.lastmtime == 0 {
+			gc.lastmtime = send_time - int64(gc.frequency*float64(len(ydata)))
+		}
+		dtime := float64(send_time-gc.lastmtime) / float64(len(ydata))
+		gc.frequency = 1000.0 / dtime
+		for i := 0; i < len(xdata); i++ {
+			xdata[i] = float64(gc.lastmtime) + dtime*float64(i+1)
+			ydata[i] = float64(data[i])
+			ave += ydata[i]
+		}
+		ave /= float64(len(ydata))
+		gc.lastmtime = send_time
+	case "gill01":
+		send_time, data0, err := rz2.ConvertGill(msg.Payload())
+		if err != nil {
+			return err
+		}
+		data := []float64{data0[1]}
 		xdata = make([]float64, len(data))
 		ydata = make([]float64, len(data))
 		ave = 0.0
@@ -595,6 +618,12 @@ func (gc *GraphClient) Draw(a *ui.Area, p *ui.AreaDrawParams) {
 		brush.R = 0.9
 		brush.G = 0.9
 		brush.B = 0.2
+		brush.A = 1.0
+	case "gill01":
+		ylabel = "Wind Speed [m/s]"
+		brush.R = 0.2
+		brush.G = 0.9
+		brush.B = 0.9
 		brush.A = 1.0
 	}
 	p.Context.Stroke(path, brush, sp)
