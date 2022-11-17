@@ -41,6 +41,7 @@ const (
 	Ill
 	Ir
 	Gill
+	Sht
 )
 
 var (
@@ -84,6 +85,8 @@ func ReadClient(fn string) error {
 					ty = Ir
 				case "gill":
 					ty = Gill
+				case "sht":
+					ty = Sht
 				}
 			}
 		}
@@ -187,6 +190,22 @@ func illStats(client *Client, msg mqtt.Message) (string, error) {
 	}
 	ave /= float64(len(data))
 	return fmt.Sprintf("%s: %s, data= %d, ave= %.3f", client.hostname, rz2.ConvertUnixtime(send_time).Format("15:04:05.000"), len(data), ave), nil
+}
+
+func shtStats(client *Client, msg mqtt.Message) (string, error) {
+	send_time, tmp_data, hum_data, err := rz2.ConvertSht(msg.Payload())
+	if err != nil {
+		return "", err
+	}
+	tmp_ave := 0.0
+	hum_ave := 0.0
+	for i :=0; i < len(tmp_data); i++ {
+		tmp_ave += float64(tmp_data[i])
+		hum_ave += float64(hum_data[i])
+	}
+	tmp_ave /= float64(len(tmp_data))
+	hum_ave /= float64(len(hum_data))
+	return fmt.Sprintf("%s: %s, data= %d, Tmp.= %.1f['C], Hum.=%.1f[%]", client.hostname, rz2.ConvertUnixtime(send_time).Format("15:04:05.000"), len(tmp_data), tmp_ave, hum_ave), nil
 }
 
 func irStats(client *Client, msg mqtt.Message) (string, error) {
@@ -320,6 +339,16 @@ func main() {
 				clientkeys[key] = c
 			} else {
 				key := fmt.Sprintf("%s/01/gill01", c.macaddress)
+				rightkeys = append(rightkeys, key)
+				clientkeys[key] = c
+			}
+		case Sht:
+			if c.column == 0 {
+				key := fmt.Sprintf("%s/01/sht31", c.macaddress)
+				leftkeys = append(leftkeys, key)
+				clientkeys[key] = c
+			} else {
+				key := fmt.Sprintf("%s/01/sht31", c.macaddress)
 				rightkeys = append(rightkeys, key)
 				clientkeys[key] = c
 			}
@@ -518,6 +547,31 @@ func main() {
 			}
 		case "gill01":
 			status, err := gillStats(cl, msg)
+			if err != nil {
+				sl.Rows[2] = fmt.Sprintf("[%s:%s](fg:red)", cl.hostname, err)
+				ui.Render(sl)
+				return
+			}
+			switch cl.column {
+			case 0:
+				for i, k := range leftkeys {
+					if k == msg.Topic() {
+						ll.Rows[i] = status
+						ui.Render(ll)
+						break
+					}
+				}
+			case 1:
+				for i, k := range rightkeys {
+					if k == msg.Topic() {
+						rl.Rows[i] = status
+						ui.Render(rl)
+						break
+					}
+				}
+			}
+		case "sht31":
+			status, err := shtStats(cl, msg)
 			if err != nil {
 				sl.Rows[2] = fmt.Sprintf("[%s:%s](fg:red)", cl.hostname, err)
 				ui.Render(sl)
