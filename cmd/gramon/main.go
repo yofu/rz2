@@ -434,6 +434,12 @@ func (gc *GraphClient) UpdateData(msg mqtt.Message) error {
 			return err
 		}
 		data := []float64{data0[1]}
+		switch gc.direction {
+		case 0:
+			data[0] = data0[0]
+		case 1:
+			data[0] = data0[1]
+		}
 		xdata = make([]float64, len(data))
 		ydata = make([]float64, len(data))
 		ave = 0.0

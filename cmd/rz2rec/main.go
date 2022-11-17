@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -14,39 +15,14 @@ import (
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	toml "github.com/pelletier/go-toml/v2"
 	"github.com/yofu/rz2"
 )
 
 var endian = binary.BigEndian
 
-type Config struct {
-	Server string `toml:"server"`
-	Cafile string `toml:"cafile"`
-	Crtfile string `toml:"crtfile"`
-	Keyfile string `toml:"keyfile"`
-	Homedir string `toml:"homedir"`
-	Removehour int `toml:"removehour"`
-	List []string `toml:"list"`
-}
-
-func (c *Config) Println() {
-	fmt.Printf("server: %s\n", c.Server)
-	fmt.Printf("cafile: %s\n", c.Cafile)
-	fmt.Printf("crtfile: %s\n", c.Crtfile)
-	fmt.Printf("keyfile: %s\n", c.Keyfile)
-	fmt.Printf("homedir: %s\n", c.Homedir)
-	fmt.Printf("removehour: %d\n", c.Removehour)
-	fmt.Print("list:\n")
-	for i, t := range c.List {
-		fmt.Printf("    %d: %s\n", i, t)
-	}
-	fmt.Println("")
-}
-
 var (
-	defaultconfig   = &Config{
-		Server: "tcp://133.11.95.82:18884",
+	defaultconfig   = &rz2.Config{
+		Server: "tcp://192.168.100.148:1883",
 		Cafile: "",
 		Crtfile: "",
 		Keyfile: "",
@@ -58,6 +34,7 @@ var (
 
 type Record struct {
 	sync.Mutex
+	path       string
 	dest       *os.File
 	dir        string
 	macaddress string
@@ -70,20 +47,23 @@ func NewRecord(dir, macaddress string) *Record {
 	return r
 }
 
-func (r *Record) setdest() error {
+func (r *Record) setdest() (string, string, error) {
 	r.Lock()
 	if r.dest != nil {
 		r.dest.Close()
 	}
 	now := time.Now()
 	name := strings.Replace(r.macaddress, ":", "_", -1)
-	w, err := os.Create(filepath.Join(r.dir, fmt.Sprintf("%s_%s.dat", name, now.Format("2006-01-02-15-04-05"))))
+	p := filepath.Join(r.dir, fmt.Sprintf("%s_%s.dat", name, now.Format("2006-01-02-15-04-05")))
+	oldp := r.path
+	r.path = p
+	w, err := os.Create(p)
 	if err != nil {
-		return err
+		return "", "", err
 	}
 	r.dest = w
 	r.Unlock()
-	return nil
+	return oldp, r.path, nil
 }
 
 func (r *Record) record(msg mqtt.Message) error {
@@ -184,24 +164,12 @@ func StartSubscriber(server string, topics []string, fn func(mqtt.Client, mqtt.M
 	return client, nil
 }
 
-func ReadConfig(fn string) error {
-	b, err := ioutil.ReadFile(fn)
-	if err != nil {
-		return err
-	}
-	fmt.Println(b)
-	fmt.Println(defaultconfig.List)
-	toml.Unmarshal(b, &defaultconfig)
-	fmt.Println(defaultconfig.List)
-	return nil
-}
-
 func main() {
 	conffn := flag.String("config", "", "config file")
 	flag.Parse()
 
 	if *conffn != "" {
-		err := ReadConfig(*conffn)
+		err := defaultconfig.ReadConfig(*conffn)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -234,7 +202,7 @@ func main() {
 			tmprecdir := filepath.Join(recdir, strings.Replace(lis[0], ":", "_", -1))
 			os.MkdirAll(tmprecdir, 0755)
 			r := NewRecord(tmprecdir, lis[0])
-			err := r.setdest()
+			_, _, err := r.setdest()
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -248,12 +216,45 @@ func main() {
 	})
 
 	ticker := time.NewTicker(time.Minute * 60)
+	// ticker := time.NewTicker(time.Second * 10)
 	conticker := time.NewTicker(time.Second)
+	backupch := make(chan string)
+	go func() {
+		for {
+			select {
+			case p := <-backupch:
+				oldpath := p
+				macdir := filepath.Base(filepath.Dir(p))
+				newpath := filepath.Join(defaultconfig.Backupdir, macdir, filepath.Base(p))
+				os.MkdirAll(filepath.Dir(newpath), 0755)
+				newfile, err := os.Create(newpath)
+				if err != nil {
+					fmt.Printf("backup: %s\n", err)
+				}
+				defer newfile.Close()
+				oldfile, err := os.Open(oldpath)
+				if err != nil {
+					fmt.Printf("backup: %s\n", err)
+				}
+				defer oldfile.Close()
+				_, err = io.Copy(newfile, oldfile)
+				if err != nil {
+					fmt.Println(err)
+				}
+				fmt.Printf("backup: %s -> %s\n", oldpath, newpath)
+			}
+		}
+	}()
 	for {
 		select {
 		case <-ticker.C:
 			for _, r := range records {
-				r.setdest()
+				oldp, _, err := r.setdest()
+				fmt.Println(oldp, err)
+				if err != nil {
+					log.Printf("setdest: %s\n", err)
+				}
+				backupch <- oldp
 			}
 			if defaultconfig.Removehour > 0 {
 				err := removeoldfiles(-1 * time.Duration(defaultconfig.Removehour) * time.Hour)

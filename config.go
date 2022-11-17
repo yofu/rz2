@@ -13,6 +13,7 @@ type Config struct {
 	Crtfile string `toml:"crtfile"`
 	Keyfile string `toml:"keyfile"`
 	Homedir string `toml:"homedir"`
+	Backupdir string `toml:"backupdir"`
 	Removehour int `toml:"removehour"`
 	List []string `toml:"list"`
 }
@@ -23,6 +24,7 @@ func (c *Config) Println() {
 	fmt.Printf("crtfile: %s\n", c.Crtfile)
 	fmt.Printf("keyfile: %s\n", c.Keyfile)
 	fmt.Printf("homedir: %s\n", c.Homedir)
+	fmt.Printf("backupdir: %s\n", c.Backupdir)
 	fmt.Printf("removehour: %d\n", c.Removehour)
 	fmt.Print("list:\n")
 	for i, t := range c.List {
@@ -36,8 +38,6 @@ func (c *Config) ReadConfig(fn string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(b)
-	fmt.Println(c.List)
 	toml.Unmarshal(b, &c)
 	fmt.Println(c.List)
 	return nil
