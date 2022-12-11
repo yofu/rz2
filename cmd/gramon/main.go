@@ -314,6 +314,8 @@ func unittext(ext string) string {
 		return "lx"
 	case "gill01":
 		return "m/s"
+	case "sht31":
+		return "'C"
 	default:
 		return ""
 	}
@@ -451,6 +453,34 @@ func (gc *GraphClient) UpdateData(msg mqtt.Message) error {
 		for i := 0; i < len(xdata); i++ {
 			xdata[i] = float64(gc.lastmtime) + dtime*float64(i+1)
 			ydata[i] = float64(data[i])
+			ave += ydata[i]
+		}
+		ave /= float64(len(ydata))
+		gc.lastmtime = send_time
+	case "sht31":
+		var send_time int64
+		buf := bytes.NewReader(msg.Payload()[:8])
+		binary.Read(buf, binary.BigEndian, &send_time)
+		send_time, tmp_data, hum_data, err := rz2.ConvertSht(msg.Payload())
+		if err != nil {
+			return err
+		}
+		xdata = make([]float64, len(tmp_data))
+		ydata = make([]float64, len(tmp_data))
+		ave = 0.0
+		if gc.lastmtime == 0 {
+			gc.lastmtime = send_time - int64(gc.frequency*float64(len(ydata)))
+		}
+		dtime := float64(send_time-gc.lastmtime) / float64(len(ydata))
+		gc.frequency = 1000.0 / dtime
+		for i := 0; i < len(xdata); i++ {
+			xdata[i] = float64(gc.lastmtime) + dtime*float64(i+1)
+			switch gc.direction {
+			case 0:
+				ydata[i] = float64(tmp_data[i])
+			case 1:
+				ydata[i] = float64(hum_data[i])
+			}
 			ave += ydata[i]
 		}
 		ave /= float64(len(ydata))
@@ -628,6 +658,17 @@ func (gc *GraphClient) Draw(a *ui.Area, p *ui.AreaDrawParams) {
 	case "gill01":
 		ylabel = "Wind Speed [m/s]"
 		brush.R = 0.2
+		brush.G = 0.9
+		brush.B = 0.9
+		brush.A = 1.0
+	case "sht31":
+		switch gc.direction {
+		case 0:
+			ylabel = "Temperature ['C]"
+		case 1:
+			ylabel = "Humidity [%%]"
+		}
+		brush.R = 0.0
 		brush.G = 0.9
 		brush.B = 0.9
 		brush.A = 1.0

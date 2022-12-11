@@ -205,7 +205,7 @@ func shtStats(client *Client, msg mqtt.Message) (string, error) {
 	}
 	tmp_ave /= float64(len(tmp_data))
 	hum_ave /= float64(len(hum_data))
-	return fmt.Sprintf("%s: %s, data= %d, Tmp.= %.1f['C], Hum.=%.1f[%]", client.hostname, rz2.ConvertUnixtime(send_time).Format("15:04:05.000"), len(tmp_data), tmp_ave, hum_ave), nil
+	return fmt.Sprintf("%s: %s, data= %d, Tmp.= %.1f['C], Hum.=%.1f[%%]", client.hostname, rz2.ConvertUnixtime(send_time).Format("15:04:05.000"), len(tmp_data), tmp_ave, hum_ave), nil
 }
 
 func irStats(client *Client, msg mqtt.Message) (string, error) {
