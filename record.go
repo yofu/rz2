@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -194,6 +195,99 @@ func ReadServerRecord(fn string) ([]ServerRecord, error) {
 			Content:    data,
 		}
 		records = append(records, r)
+	}
+}
+
+func ReadServerRecordChan(fn string, c chan<- ServerRecord) {
+	f, err := os.Open(fn)
+	if err != nil {
+		close(c)
+		return
+	}
+	defer f.Close()
+	bufct := make([]byte, 8)
+	bufsize := make([]byte, 4)
+	readbyte := 0
+	for {
+		// Read current time
+		n, err := f.Read(bufct)
+		readbyte += n
+		if n == 0 || err != nil {
+			if err == io.EOF {
+				close(c)
+				return
+			}
+			close(c)
+			return
+		}
+		if n != 8 {
+			log.Fatal(fmt.Errorf("reading current time: %d != 8", n))
+			close(c)
+			return
+		}
+		var ct int64
+		buf := bytes.NewReader(bufct)
+		binary.Read(buf, binary.LittleEndian, &ct)
+
+		// Read topic
+		btopic := make([]byte, 0)
+		for {
+			tmpbuf := make([]byte, 1)
+			n, err := f.Read(tmpbuf)
+			readbyte += n
+			if n == 0 || err != nil {
+				if err == io.EOF {
+					close(c)
+					return
+				}
+				log.Fatal(err)
+			}
+			if tmpbuf[0] == byte(0) {
+				break
+			}
+			btopic = append(btopic, tmpbuf[0])
+		}
+		topic := string(btopic)
+
+		// Read buffer size
+		n, err = f.Read(bufsize)
+		readbyte += n
+		if n == 0 || err != nil {
+			if err == io.EOF {
+				close(c)
+				return
+			}
+			log.Fatal(err)
+		}
+		if n != 4 {
+			log.Fatal(fmt.Errorf("reading data size: %d != 4", n))
+		}
+		var size int32
+		buf = bytes.NewReader(bufsize)
+		binary.Read(buf, binary.BigEndian, &size)
+
+		// Read data
+		data := make([]byte, size)
+		n, err = f.Read(data)
+		readbyte += n
+		if n == 0 || err != nil {
+			if err == io.EOF {
+				close(c)
+				return
+			}
+			close(c)
+			return
+		}
+		sk := int64(size) - int64(n)
+		if sk > 0 {
+			log.Fatal(fmt.Errorf("reading data: %d != %d", n, size))
+		}
+		r := ServerRecord{
+			ServerTime: ct,
+			Topic:      topic,
+			Content:    data,
+		}
+		c <- r
 	}
 }
 
